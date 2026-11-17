@@ -36,3 +36,9 @@ Media openGym dilisensikan oleh Gym visual (gymvisual.com) khusus untuk aplikasi
 ## Sumber data & lisensi
 - Teks gerakan: katalog latihan openGym (https://github.com/DuarteSantos8/openGym), AGPL-3.0. App ini ikut wajib open source di bawah AGPL-3.0 kalau dipublikasikan.
 - Angka gizi adalah estimasi dari TKPI, USDA, dan info gizi publik brand. Porsi tiap outlet bisa beda.
+
+## Aplikasi Android (APK)
+- File siap unduh: `download/LEBIHFIT.apk`. Di Android, tombol "Download Aplikasi Android" di halaman awal langsung mengunduh file ini.
+- APK membuka https://transformasi.jadilebihfit.xyz layar penuh, jadi isinya selalu sama dengan versi web dan ikut ter-update otomatis. Update APK hanya perlu kalau alamat situs atau ikon berubah.
+- Source code Android ada di `android/`. Build ulang (Ubuntu): `KEYSTORE=/path/lebihfit.keystore KS_PASS=... bash android/build.sh`, naikkan `versionCode` di `android/AndroidManifest.xml` dulu.
+- Keystore TIDAK disimpan di repo. Simpan baik-baik: tanpa keystore yang sama, APK versi baru tidak bisa meng-update aplikasi yang sudah terpasang.

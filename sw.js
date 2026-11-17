@@ -1,5 +1,5 @@
 /* Service worker: simpan app + data di cache supaya LEBIHFIT jalan offline */
-const CACHE = "lebihfit-v3";
+const CACHE = "lebihfit-v4";
 const SHELL = ["./", "./index.html", "./app.js", "./data/foods.js", "./data/videos.js", "./data/exercises.json", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", e => {

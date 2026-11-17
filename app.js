@@ -237,7 +237,10 @@ function gauge(pct){
 /* ================== GATE ================== */
 let installEvt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; });
-const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+const IN_APK = /LebihFitApp/.test(navigator.userAgent);
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const APK_URL = "download/LEBIHFIT.apk";
+const isStandalone = () => IN_APK || window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 
 /* Data contoh khusus untuk preview di landing page (tidak pernah disimpan) */
 function demoState(){
@@ -287,13 +290,34 @@ function renderGate(){
     <div style="display:flex;flex-direction:column;gap:12px">
       <p class="small muted" style="font-weight:600">Mau akses lewat mana?</p>
       <button class="choice primary" id="gWeb"><span class="ci">${ic("globe")}</span><span class="grow"><b>Akses via Web</b><small>Langsung pakai di browser, tanpa install</small></span>${ic("arrow")}</button>
-      <button class="choice" id="gApp"><span class="ci">${ic("phone")}</span><span class="grow"><b>Install sebagai Aplikasi</b><small>Ikon di home screen, bisa dipakai offline</small></span>${ic("arrow")}</button>
+      <button class="choice" id="gApp"><span class="ci">${ic("phone")}</span><span class="grow"><b>${IS_ANDROID ? "Download Aplikasi Android" : "Install sebagai Aplikasi"}</b><small>${IS_ANDROID ? "File APK langsung terunduh, install sekali tap" : "Ikon di home screen, bisa dipakai offline"}</small></span>${ic("arrow")}</button>
       <p class="privacy">${ic("lock","ic-sm")}<span>Tidak ada akun dan tidak ada server. Semua data (profil, makanan, latihan) disimpan di device ini saja.</span></p>
     </div></div>`;
   $("#gWeb").onclick = () => { S.access = "web"; save(); go(); };
   $("#gApp").onclick = installFlow;
 }
+function downloadApk(){
+  const a = document.createElement("a");
+  a.href = APK_URL; a.download = "LEBIHFIT.apk"; a.rel = "noopener";
+  document.body.append(a); a.click(); a.remove();
+}
+function apkFlow(){
+  downloadApk();
+  const steps = [
+    "File <b>LEBIHFIT.apk</b> sedang diunduh. Kalau Chrome bertanya, pilih <b>Download</b> / <b>Tetap download</b>.",
+    "Tap notifikasi unduhan, atau buka aplikasi <b>File / Download</b> lalu tap <b>LEBIHFIT.apk</b>.",
+    "Kalau muncul peringatan, tap <b>Setelan</b> lalu aktifkan <b>Izinkan dari sumber ini</b>, kembali, tap <b>Install</b>.",
+    "Buka <b>LEBIHFIT</b> dari ikon di home screen."
+  ];
+  openSheet("Download aplikasi Android", `<ol class="steps-list">${steps.map(s => `<li><span>${s}</span></li>`).join("")}</ol>
+    <a class="btn btn-line btn-block" href="${APK_URL}" download="LEBIHFIT.apk">${ic("dl","ic-sm")} Unduh ulang APK</a>
+    <p class="note">Peringatan "sumber tidak dikenal" muncul karena aplikasi tidak dari Play Store. Isi aplikasinya sama persis dengan versi web dan ikut ter-update otomatis. Data di web dan di aplikasi tersimpan terpisah, pindahkan pakai Backup &amp; Restore di Profil.</p>
+    <button class="btn btn-lime btn-block" id="contWeb">Lanjut dulu di browser ${ic("arrow","ic-sm")}</button>`, b => {
+      $("#contWeb", b).onclick = () => { closeSheet(); S.access = "web"; save(); go(); };
+  });
+}
 function installFlow(){
+  if (IS_ANDROID && !IN_APK) return apkFlow();
   if (installEvt) {
     installEvt.prompt();
     installEvt.userChoice.finally(() => { installEvt = null; S.access = "app"; save(); go(); });
