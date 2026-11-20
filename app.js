@@ -535,6 +535,7 @@ function vTrain(){
   </div>
   ${day.items.length ? `
   <div class="card" style="padding:14px 16px"><div class="row between small"><span class="muted">Progres set</span><b class="num">${ws.done}/${ws.total}</b></div><div class="bar" style="margin-top:8px"><i style="width:${ws.total ? ws.done/ws.total*100 : 0}%"></i></div></div>
+  <button class="btn btn-lime btn-block" id="tGym">${ic("play","ic-sm")} Mode Gym: layar penuh + timer istirahat</button>
   <div class="list">${day.items.map((it, idx) => exCard(it, idx, L)).join("")}</div>
   <button class="btn btn-line btn-block" id="tAddEx">${ic("plus","ic-sm")} Tambah gerakan</button>
   <button class="btn ${ws.finished ? "btn-ghost" : "btn-lime"} btn-block" id="tFinish">${ws.finished ? "Latihan selesai ✓ (tap untuk batal)" : "Selesai latihan"} </button>`
@@ -566,6 +567,137 @@ function lastFor(exId, setI, field){
   }
   return "";
 }
+/* ---------- Mode Gym: satu gerakan per layar, tombol besar, timer istirahat ---------- */
+let G = null;
+const REST_OPTS = [60, 90, 120, 180];
+function restPref(){ try { return +localStorage.getItem("lebihfit:rest") || 90; } catch(e){ return 90; } }
+function openGym(k){
+  const day = S.plan.days[wdIdx(k)];
+  if (!day.items.length) return;
+  const w = peek(k).wo;
+  // mulai dari gerakan pertama yang belum selesai
+  let idx = day.items.findIndex((it, i) => { const s = (w && w.sets && w.sets[i]) || []; return Array.from({length: Number(it.sets) || 0}, (_, j) => s[j] && s[j].d).some(d => !d); });
+  if (idx < 0) idx = 0;
+  const el = document.createElement("div"); el.className = "gym"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Mode Gym");
+  document.body.append(el); document.body.style.overflow = "hidden";
+  G = {k, idx, el, start: (w && w.gymStart) || Date.now(), rest: null, tick: null, wake: null, restSec: restPref()};
+  const wl = woLog(k); if (!wl.gymStart) { wl.gymStart = G.start; save(); }
+  try { if (navigator.wakeLock) navigator.wakeLock.request("screen").then(l => { if (G) G.wake = l; }).catch(() => {}); } catch(e){}
+  G.tick = setInterval(gymTick, 250);
+  renderGym();
+}
+function closeGym(){
+  if (!G) return;
+  clearInterval(G.tick);
+  try { if (G.wake) G.wake.release(); } catch(e){}
+  G.el.remove(); document.body.style.overflow = ""; G = null; go();
+}
+function fmtClock(s){ s = Math.max(0, Math.round(s)); return Math.floor(s/60) + ":" + String(s%60).padStart(2, "0"); }
+function beep(){
+  try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch(e){}
+  try {
+    const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    const a = G && G.audio || (G.audio = new A()), o = a.createOscillator(), g = a.createGain();
+    o.frequency.value = 880; g.gain.setValueAtTime(0.25, a.currentTime); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.5);
+    o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + 0.5);
+  } catch(e){}
+}
+function gymTick(){
+  if (!G) return;
+  const el = $("#gElapsed", G.el); if (el) el.textContent = fmtClock((Date.now() - G.start) / 1000);
+  if (G.rest) {
+    const left = (G.rest.end - Date.now()) / 1000;
+    const t = $("#gRestT", G.el), bar = $("#gRestBar", G.el);
+    if (t) t.textContent = fmtClock(left);
+    if (bar) bar.style.width = Math.max(0, Math.min(100, left / G.rest.total * 100)) + "%";
+    if (left <= 0) { G.rest = null; beep(); renderGym(); toast("Istirahat selesai, lanjut set berikutnya!"); }
+  }
+}
+function renderGym(){
+  if (!G) return;
+  const k = G.k, day = S.plan.days[wdIdx(k)], it = day.items[G.idx], n = Number(it.sets) || 0;
+  const w = peek(k).wo, sets = (w && w.sets && w.sets[G.idx]) || [];
+  const done = Array.from({length: n}, (_, j) => sets[j] && sets[j].d).filter(Boolean).length;
+  const allSets = day.items.reduce((a, x) => a + (Number(x.sets) || 0), 0);
+  const allDone = day.items.reduce((a, x, i) => a + (((w && w.sets && w.sets[i]) || []).filter(s => s && s.d).length), 0);
+  const last = G.idx === day.items.length - 1;
+  const vid = (window.VIDEOS || {})[it.id];
+  G.el.innerHTML = `
+  <div class="gym-top">
+    <button class="icon-btn" id="gClose" aria-label="Tutup Mode Gym">${ic("close","ic-sm")}</button>
+    <div class="gym-meta"><span class="tiny muted">${esc(day.name)} · gerakan ${G.idx + 1}/${day.items.length}</span><b class="num" id="gElapsed">${fmtClock((Date.now() - G.start)/1000)}</b></div>
+    <span class="tiny muted num" style="width:44px;text-align:right">${allDone}/${allSets}</span>
+  </div>
+  <div class="bar" style="height:5px"><i style="width:${allSets ? allDone/allSets*100 : 0}%"></i></div>
+  <div class="gym-body">
+    <div>
+      <h2 class="gym-name">${esc(it.name)}</h2>
+      <p class="muted num" style="margin-top:6px">${n} set × ${esc(it.reps)} reps · ${done}/${n} selesai</p>
+      <button class="link" id="gTut" style="margin-top:8px">${vid ? "▶ Tonton video tutorial" : "Lihat tutorial gerakan"}</button>
+    </div>
+    ${G.rest ? `<div class="gym-rest">
+        <span class="small" style="font-weight:700">Istirahat</span>
+        <b class="num" id="gRestT">${fmtClock((G.rest.end - Date.now())/1000)}</b>
+        <div class="bar" style="height:8px;background:rgba(17,20,10,.15)"><i id="gRestBar" style="background:var(--lime-ink);width:100%"></i></div>
+        <div class="row" style="gap:8px;justify-content:center;margin-top:12px">
+          <button class="btn btn-dark btn-sm" id="gRestPlus">+15 dtk</button>
+          <button class="btn btn-dark btn-sm" id="gRestSkip">Lewati</button>
+        </div></div>` : ""}
+    <div class="gym-sets">
+      ${Array.from({length: n}, (_, j) => { const s = sets[j] || {}; return `<div class="gym-set ${s.d ? "on" : ""}">
+        <span class="n">Set ${j + 1}</span>
+        <label><input id="gkg-${j}" inputmode="decimal" value="${esc(s.kg ?? "")}" placeholder="${esc(lastFor(it.id, j, "kg") || (j > 0 && sets[j-1] && sets[j-1].kg) || "-")}" data-gk="${j}.kg"><small>kg</small></label>
+        <label><input id="grp-${j}" inputmode="numeric" value="${esc(s.r ?? "")}" placeholder="${esc(lastFor(it.id, j, "r") || String(it.reps).split("-")[0])}" data-gk="${j}.r"><small>reps</small></label>
+        <button class="gym-ok" data-gd="${j}" aria-label="Selesai set ${j + 1}">${ic("check")}</button></div>`; }).join("")}
+    </div>
+    <div class="gym-restpick"><span class="tiny muted">Waktu istirahat</span>${REST_OPTS.map(s => `<button class="chip ${G.restSec === s ? "on" : ""}" data-rs="${s}">${s < 120 ? s + " dtk" : (s/60) + " mnt"}</button>`).join("")}</div>
+  </div>
+  <div class="gym-nav">
+    <button class="btn btn-line" id="gPrev" ${G.idx === 0 ? "disabled" : ""}>${ic("back","ic-sm")} Sebelumnya</button>
+    ${last ? `<button class="btn btn-lime" id="gFinish">Selesai latihan ${ic("check","ic-sm")}</button>` : `<button class="btn btn-lime" id="gNext">Berikutnya ${ic("next","ic-sm")}</button>`}
+  </div>`;
+  const b = G.el;
+  $("#gClose", b).onclick = closeGym;
+  $("#gTut", b).onclick = () => openTutorial(it.id);
+  $$("[data-gk]", b).forEach(inp => inp.onchange = () => {
+    const [j, f] = inp.dataset.gk.split("."); const wl = woLog(k);
+    wl.sets[G.idx] = wl.sets[G.idx] || []; wl.sets[G.idx][j] = wl.sets[G.idx][j] || {}; wl.sets[G.idx][j][f] = inp.value.trim(); save();
+  });
+  $$("[data-gd]", b).forEach(btn => btn.onclick = () => {
+    const j = btn.dataset.gd, wl = woLog(k);
+    wl.sets[G.idx] = wl.sets[G.idx] || []; const cur = wl.sets[G.idx][j] = wl.sets[G.idx][j] || {};
+    const kg = $(`#gkg-${j}`, b), rp = $(`#grp-${j}`, b);
+    if (!cur.kg && (kg.value || kg.placeholder !== "-")) cur.kg = kg.value || kg.placeholder;
+    if (!cur.r) cur.r = rp.value || rp.placeholder;
+    cur.d = !cur.d; save();
+    if (G.audio === undefined) { try { const A = window.AudioContext || window.webkitAudioContext; if (A) G.audio = new A(); } catch(e){} }
+    const nowDone = Array.from({length: n}, (_, x) => wl.sets[G.idx][x] && wl.sets[G.idx][x].d).filter(Boolean).length;
+    if (cur.d && !(nowDone === n && last)) G.rest = {end: Date.now() + G.restSec * 1000, total: G.restSec};
+    if (cur.d && nowDone === n && !last) toast("Gerakan selesai! Istirahat dulu, lalu tap Berikutnya");
+    renderGym();
+  });
+  $$("[data-rs]", b).forEach(x => x.onclick = () => {
+    G.restSec = +x.dataset.rs; try { localStorage.setItem("lebihfit:rest", G.restSec); } catch(e){}
+    if (G.rest) { const passed = G.rest.total - (G.rest.end - Date.now())/1000; G.rest = {end: Date.now() + Math.max(0, G.restSec - passed) * 1000, total: G.restSec}; }
+    renderGym();
+  });
+  const plus = $("#gRestPlus", b); if (plus) plus.onclick = () => { G.rest.end += 15000; G.rest.total += 15; gymTick(); };
+  const skip = $("#gRestSkip", b); if (skip) skip.onclick = () => { G.rest = null; renderGym(); };
+  $("#gPrev", b).onclick = () => { if (G.idx > 0) { G.idx--; G.rest = null; renderGym(); } };
+  const nx = $("#gNext", b); if (nx) nx.onclick = () => { G.idx++; renderGym(); };
+  const fin = $("#gFinish", b); if (fin) fin.onclick = () => {
+    const wl = woLog(k), real = Math.round((Date.now() - G.start) / 60000);
+    wl.finished = true; wl.min = real >= 5 ? real : estMin(day); wl.kcal = estBurn(wl.min); wl.name = day.name; save();
+    closeGym(); toast(`Mantap! ${wl.min} menit, ±${wl.kcal} kkal terbakar`);
+  };
+}
+/* Tombol back (aplikasi Android) & Escape: tutup panel dulu, lalu Mode Gym */
+window.lebihBack = () => { if (sheetEls) { closeSheet(); return true; } if (G) { closeGym(); return true; } return false; };
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheetEls && G) closeGym(); });
+document.addEventListener("visibilitychange", () => {
+  try { if (G && document.visibilityState === "visible" && navigator.wakeLock) navigator.wakeLock.request("screen").then(l => { if (G) G.wake = l; }).catch(() => {}); } catch(e){}
+});
+
 function woLog(k){ const L = log(k); if (!L.wo) L.wo = {sets:{}, finished:false}; L.wo.ids = S.plan.days[wdIdx(k)].items.map(i => i.id); return L.wo; }
 function bTrain(){
   $$("[data-tt]").forEach(b => b.onclick = () => { trainTab = b.dataset.tt; go(); });
@@ -588,6 +720,7 @@ function bTrain(){
   });
   $$("[data-exm]").forEach(b => b.onclick = () => exMenu(+b.dataset.exm));
   const add = $("#tAddEx"); if (add) add.onclick = () => openLibrary("pick", di);
+  const gym = $("#tGym"); if (gym) gym.onclick = () => openGym(k);
   const fin = $("#tFinish"); if (fin) fin.onclick = () => {
     const w = woLog(k); w.finished = !w.finished;
     if (w.finished) { w.min = estMin(day); w.kcal = estBurn(w.min); w.name = day.name; toast(`Mantap! ±${w.min} menit, ±${w.kcal} kkal terbakar`); }

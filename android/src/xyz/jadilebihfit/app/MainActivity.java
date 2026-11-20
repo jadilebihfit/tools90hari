@@ -134,7 +134,7 @@ public class MainActivity extends Activity {
         if (fullscreenView != null) { onHideFullscreen(); return; }
         // Tutup panel yang sedang terbuka di app (sama seperti tombol X); kalau tidak ada panel, keluar.
         web.evaluateJavascript(
-            "(function(){var s=document.querySelector('.sheet');if(s){document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));return 'closed';}return 'none';})()",
+            "(function(){if(window.lebihBack){return window.lebihBack()?'closed':'none';}var s=document.querySelector('.sheet');if(s){document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));return 'closed';}return 'none';})()",
             new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String value) {
